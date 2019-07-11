@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import time
+import os
 
 
 # 사각형을 그리는 마우스 콜백
@@ -24,7 +25,7 @@ def mouse_callback(event, x, y, flags, param):
 
 # 추적기 함수
 def tracking(input_bbox, input_tracker):
-    global frame, frame_show, cap, frame_width, frame_height
+    global frame, frame_show, cap, frame_width, frame_height, file_count, save_width, save_height, flipped
 
     tracker = input_tracker()
     tracked = tracker.init(frame, input_bbox)
@@ -36,10 +37,13 @@ def tracking(input_bbox, input_tracker):
     while True:
         t0 = time.time()
         has_frame, frame = cap.read()
+
+        # 영상이 뒤집어졌으면 다시 뒤집는다
+        if flipped:
+            frame = cv2.flip(frame, -1)
         frame = cv2.resize(frame, (frame_width, frame_height))
 
         frame_show = np.copy(frame)
-        position = cap.get(cv2.CAP_PROP_POS_FRAMES)
 
         if not has_frame:
             break
@@ -51,18 +55,20 @@ def tracking(input_bbox, input_tracker):
         # 추적기 업데이트해서 추적이 되었으면 해당 영역에 사각형 그리고 이미지 저장
         if tracked:
             x, y, w, h = [int(i) for i in bbox]
-            # 검출된 이미지 영역 저장
-            name_to_save = './data/'+str(int(position))+'.jpg'
-            if w > h and (y + w) <= frame_height:
-                cv2.imwrite(name_to_save, frame[y:y+w, x:x+w])
-            elif w > h and (y + w) >= frame_height:
-                cv2.imwrite(name_to_save, frame[y:frame_width, x:frame_width])
-            elif w < h and (x + h) <= frame_width:
-                cv2.imwrite(name_to_save, frame[y:y+h, x:x+h])
-            elif w < h and (x + h) >= frame_width:
-                cv2.imwrite(name_to_save, frame[y:y+h, x:frame_width])
 
-            #cv2.imwrite(name_to_save, frame[y:y+h, x:x+w])
+            # 검출된 이미지 영역 저장
+            # name_to_save = './data/'+str(int(position))+'.jpg'
+            name_to_save = './data/' + person_name + '_' + str(file_count) + '.jpg'
+            if w > h and (y + w) <= frame_height:
+                cv2.imwrite(name_to_save, cv2.resize(frame[y:y+w, x:x+w], (save_width, save_height)))
+            elif w > h and (y + w) >= frame_height:
+                cv2.imwrite(name_to_save, cv2.resize(frame[y:y+h, x:x+h], (540, 540)))
+            elif w < h and (x + h) <= frame_width:
+                cv2.imwrite(name_to_save, cv2.resize(frame[y:y+h, x:x+h], (save_width, save_height)))
+            elif w < h and (x + h) >= frame_width:
+                cv2.imwrite(name_to_save, cv2.resize(frame[y:y+w, x:w], (save_width, save_height)))
+            file_count += 1
+
             # 검출된 영역에 사각형 그리기
             cv2.rectangle(frame_show, (x, y), (x + w, y + h), (0, 255, 0), 1)
             fps = 1 / (time.time() - t0)
@@ -74,19 +80,31 @@ def tracking(input_bbox, input_tracker):
 
         # s를 누르면 중간에 빠져나옴
         k = cv2.waitKey(1)
-        if k == ord('s'):
+        if k == ord('d'):
             break
 
 
 # 여기서부터 메인함수 ---------------------------------------
-
+print("미리 data 폴더를 해당 경로에 만들어주세요.")
 video_name = input("동영상 이름 : ")
-print("a키를 누르면 10프레임씩 이동, 마우스 드래그로 객체 추적 및 저장 (s를 눌러 실행)\ns키를 누르면 추적 중지")
+person_name = input("편집자 이름 : ")
+print("a키를 누르면 10프레임씩 이동, s키로 뒤로가기\n마우스 드래그로 객체 추적 및 저장 (d를 눌러 실행)\n추적 중 d키를 누르면 추적 중지")
 
 # 한번에 스킵할 프레임 개수, default = 1920 * 1080
-num_skip = 10
+num_skip = 20
 frame_width = 960
 frame_height = 540
+
+# 저장할 때의 이미지 크기
+save_width = 200
+save_height = 200
+
+# 영상이 반전되었는지
+flipped = True
+
+# data 폴더 내에 있는 이미지 개수 카운트
+file_names = os.listdir('./data')
+file_count = len(file_names)
 
 # 추적기 종류
 # tracker = cv2.TrackerMedianFlow_create
@@ -97,6 +115,11 @@ tracker = cv2.TrackerKCF_create
 
 cap = cv2.VideoCapture(video_name)
 _, frame = cap.read()
+
+# 영상이 뒤집어졌으면 다시 뒤집는다
+if flipped:
+    frame = cv2.flip(frame, -1)
+
 frame = cv2.resize(frame, (frame_width, frame_height))
 
 frame_show = np.copy(frame)
@@ -124,10 +147,31 @@ while True:
         else:
             cap.set(cv2.CAP_PROP_POS_FRAMES, position + num_skip)
             _, frame = cap.read()
+
+            # 영상이 뒤집어졌으면 다시 뒤집는다
+            if flipped:
+                frame = cv2.flip(frame, -1)
+
             frame = cv2.resize(frame, (frame_width, frame_height))
             frame_show = np.copy(frame)
 
     elif k == ord('s'):
+        position = cap.get(cv2.CAP_PROP_POS_FRAMES)
+        # 뒤로 돌아가려는데 처음에 도착하면 아무일도 일어나지 않음
+        if position - num_skip <= 1:
+            print("처음 프레임입니다 ~")
+        else:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, position - num_skip)
+            _, frame = cap.read()
+
+            # 영상이 뒤집어졌으면 다시 뒤집는다
+            if flipped:
+                frame = cv2.flip(frame, -1)
+
+            frame = cv2.resize(frame, (frame_width, frame_height))
+            frame_show = np.copy(frame)
+
+    elif k == ord('d'):
         if s_y > e_y:
             s_y, e_y = e_y, s_y
         if s_x > e_x:
