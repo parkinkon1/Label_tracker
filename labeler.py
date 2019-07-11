@@ -56,6 +56,10 @@ def tracking(input_bbox, input_tracker):
         if tracked:
             x, y, w, h = [int(i) for i in bbox]
 
+            # 박스가 프레임을 넘어가면
+            if x + w >= frame_width or x <= 0 or y + h >= frame_height or y <= 0:
+                break
+
             # 검출된 이미지 영역 저장
             # name_to_save = './data/'+str(int(position))+'.jpg'
             name_to_save = './data/' + person_name + '_' + str(file_count) + '.jpg'
@@ -88,6 +92,7 @@ def tracking(input_bbox, input_tracker):
 print("미리 data 폴더를 해당 경로에 만들어주세요.")
 video_name = input("동영상 이름 : ")
 person_name = input("편집자 이름 : ")
+flipped_input = int(input("영상이 뒤집어졌으면 1, 정상이면 0 : "))
 print("a키를 누르면 10프레임씩 이동, s키로 뒤로가기\n마우스 드래그로 객체 추적 및 저장 (d를 눌러 실행)\n추적 중 d키를 누르면 추적 중지")
 
 # 한번에 스킵할 프레임 개수, default = 1920 * 1080
@@ -100,7 +105,10 @@ save_width = 200
 save_height = 200
 
 # 영상이 반전되었는지
-flipped = True
+if flipped_input == 1:
+    flipped = True
+else:
+    flipped = False
 
 # data 폴더 내에 있는 이미지 개수 카운트
 file_names = os.listdir('./data')
@@ -177,7 +185,7 @@ while True:
         if s_x > e_x:
             s_x, e_x = e_x, s_x
 
-        if e_y - s_y > 0 and e_x - s_x > 0:
+        if e_y - s_y >= 0 and e_x - s_x >= 0:
             tracking((s_x, s_y, e_x - s_x, e_y - s_y), tracker)
 
     elif k == 27:
